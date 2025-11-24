@@ -49,17 +49,26 @@ async fn main() -> anyhow::Result<()> {
     println!("Found {} nodes.", nodes_data.len());
 
     // Initialize Tera templates
-    // We'll load templates from the "templates" directory relative to the executable or CWD
-    // For development, we can assume "templates/**/*"
-    let tera = match Tera::new("templates/**/*") {
+    // Find templates directory relative to executable location
+    let exe_path = std::env::current_exe()?;
+    let exe_dir = exe_path.parent().unwrap();
+    
+    // Try templates relative to exe first, then fall back to CWD (for dev)
+    let templates_pattern = exe_dir.join("templates/**/*");
+    let tera = match Tera::new(templates_pattern.to_str().unwrap()) {
         Ok(t) => t,
-        Err(e) => {
-            println!("Parsing error(s): {}", e);
-            ::std::process::exit(1);
+        Err(_) => {
+            // Fallback to CWD for development
+            match Tera::new("templates/**/*") {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("Template parsing error: {}", e);
+                    eprintln!("Tried paths: {:?} and ./templates/", templates_pattern);
+                    std::process::exit(1);
+                }
+            }
         }
     };
-    // Disable autoescape for HTML generation if needed, but usually safe to keep on
-    // tera.autoescape_on(vec![]);
 
     let app_state = routes::AppState {
         nodes_data: Arc::new(RwLock::new(nodes_data)),
@@ -68,6 +77,14 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Setup Router
+    // Determine assets directory (relative to exe or CWD)
+    let assets_dir = exe_dir.join("assets");
+    let assets_path = if assets_dir.exists() {
+        assets_dir
+    } else {
+        PathBuf::from("assets") // Fallback to CWD for dev
+    };
+    
     let app = Router::new()
         .route("/", get(routes::dashboard))
         .route("/node/:node_name", get(routes::node_view))
@@ -76,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/db/:node_name", get(routes::get_db_tables))
         .route("/api/db/:node_name/:table_name", get(routes::get_db_table_data))
         .route("/api/gossip/:node_name", get(routes::get_gossip))
-        .nest_service("/assets", ServeDir::new("assets"))
+        .nest_service("/assets", ServeDir::new(assets_path))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(app_state);
