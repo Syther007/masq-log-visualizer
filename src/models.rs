@@ -23,9 +23,9 @@ pub struct TableData {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct DatabaseData {
-    // For the full dump, we might want this. 
-    // But for the optimized version, we might just store table names in NodeData 
-    // and fetch content on demand. 
+    // For the full dump, we might want this.
+    // But for the optimized version, we might just store table names in NodeData
+    // and fetch content on demand.
     // However, to match the original structure for the "data.js" generation:
     pub tables: HashMap<String, TableData>,
 }
@@ -42,7 +42,7 @@ pub struct NodeData {
     // In the Rust version, we might keep this empty or minimal until requested,
     // but for compatibility with the template rendering which expects `node.database.tables`,
     // we should include it.
-    pub database: DatabaseData, 
+    pub database: DatabaseData,
 }
 
 pub type AllNodesData = HashMap<String, NodeData>;

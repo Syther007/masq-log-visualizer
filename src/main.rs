@@ -2,10 +2,7 @@ mod models;
 mod parser;
 mod routes;
 
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::{routing::get, Router};
 use clap::Parser;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -52,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
     // Find templates directory relative to executable location
     let exe_path = std::env::current_exe()?;
     let exe_dir = exe_path.parent().unwrap();
-    
+
     // Try templates relative to exe first, then fall back to CWD (for dev)
     let templates_pattern = exe_dir.join("templates/**/*");
     let tera = match Tera::new(templates_pattern.to_str().unwrap()) {
@@ -84,14 +81,20 @@ async fn main() -> anyhow::Result<()> {
     } else {
         PathBuf::from("assets") // Fallback to CWD for dev
     };
-    
+
     let app = Router::new()
         .route("/", get(routes::dashboard))
         .route("/node/:node_name", get(routes::node_view))
-        .route("/api/logs/:node_name/:file_name/range", get(routes::get_log_range))
+        .route(
+            "/api/logs/:node_name/:file_name/range",
+            get(routes::get_log_range),
+        )
         .route("/api/logs/:node_name/:file_name", get(routes::download_log))
         .route("/api/db/:node_name", get(routes::get_db_tables))
-        .route("/api/db/:node_name/:table_name", get(routes::get_db_table_data))
+        .route(
+            "/api/db/:node_name/:table_name",
+            get(routes::get_db_table_data),
+        )
         .route("/api/gossip/:node_name", get(routes::get_gossip))
         .nest_service("/assets", ServeDir::new(assets_path))
         .layer(CorsLayer::permissive())

@@ -59,6 +59,24 @@ cargo run -- -i ../Example-Logs-3 --port 8080
 cargo run -- -i ../Example-Logs-3 --host 0.0.0.0 --port 8080
 ```
 
+## Development
+
+### Running CI Checks Locally
+
+Before pushing code, run CI checks locally using the scripts in the `ci/` directory:
+
+```bash
+# Run all checks (tests, formatting, clippy)
+./ci/check-all.sh
+
+# Or run individually:
+./ci/test.sh      # Run tests
+./ci/fmt.sh       # Check formatting
+./ci/clippy.sh    # Run lints
+```
+
+See [ci/README.md](ci/README.md) for more details.
+
 ## Project Structure
 
 ```

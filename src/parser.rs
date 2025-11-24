@@ -5,28 +5,31 @@ use regex::Regex;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{Read, BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 
 pub fn scan_directory(input_dir: &Path) -> Result<HashMap<String, NodeData>> {
     let mut all_data = HashMap::new();
-    
+
     if !input_dir.exists() {
-        return Err(anyhow::anyhow!("Input directory does not exist: {:?}", input_dir));
+        return Err(anyhow::anyhow!(
+            "Input directory does not exist: {:?}",
+            input_dir
+        ));
     }
 
     for entry in fs::read_dir(input_dir)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.is_dir() {
             let node_name = path.file_name().unwrap().to_string_lossy().to_string();
-            
+
             // Heuristic: check if it looks like a node dir
             let current_log = path.join("MASQNode_rCURRENT.log");
             let has_logs = fs::read_dir(&path)?.any(|f| {
-                f.map(|e| e.path().extension().map_or(false, |ext| ext == "zip"))
-                 .unwrap_or(false)
+                f.map(|e| e.path().extension().is_some_and(|ext| ext == "zip"))
+                    .unwrap_or(false)
             });
 
             if current_log.exists() || has_logs {
@@ -110,7 +113,7 @@ fn process_zip_log(path: &Path, data: &mut NodeData) -> Result<()> {
     let file = File::open(path)?;
     let mut decoder = GzDecoder::new(file);
     let mut content = String::new();
-    
+
     // Try to decode as gzip
     if decoder.read_to_string(&mut content).is_ok() {
         parse_content(&content, data);
@@ -131,11 +134,16 @@ fn parse_content(content: &str, data: &mut NodeData) {
         if line.contains("DEBUG: Neighborhood: Route back:") {
             if let Some(caps) = route_regex.captures(line) {
                 if let Some(route_str) = caps.get(1) {
-                    let parts: Vec<&str> = route_str.as_str().split(" -> ").map(|s| s.trim()).collect();
+                    let parts: Vec<&str> =
+                        route_str.as_str().split(" -> ").map(|s| s.trim()).collect();
                     for i in 0..parts.len().saturating_sub(1) {
                         let from = parts[i].to_string();
-                        let to = parts[i+1].to_string();
-                        if !data.neighborhood.iter().any(|e| e.from == from && e.to == to) {
+                        let to = parts[i + 1].to_string();
+                        if !data
+                            .neighborhood
+                            .iter()
+                            .any(|e| e.from == from && e.to == to)
+                        {
                             data.neighborhood.push(NeighborhoodEdge { from, to });
                         }
                     }
@@ -161,22 +169,25 @@ fn read_last_lines(path: &Path, num_lines: usize) -> Result<String> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let lines: Vec<String> = reader.lines().collect::<Result<_, _>>()?;
-    
+
     let start = lines.len().saturating_sub(num_lines);
     Ok(lines[start..].join("\n"))
 }
 
 fn extract_database_structure(db_path: &Path) -> Result<DatabaseData> {
     let mut db_data = DatabaseData::default();
-    
+
     // Copy to temp file to avoid locks
     let tmp_path = db_path.with_extension("db.tmp");
     fs::copy(db_path, &tmp_path)?;
-    
+
     let conn = Connection::open(&tmp_path)?;
-    
-    let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")?;
-    let table_names: Vec<String> = stmt.query_map([], |row| row.get(0))?
+
+    let mut stmt = conn.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+    )?;
+    let table_names: Vec<String> = stmt
+        .query_map([], |row| row.get(0))?
         .collect::<Result<_, _>>()?;
     drop(stmt); // Drop stmt before iterating
 
@@ -184,14 +195,18 @@ fn extract_database_structure(db_path: &Path) -> Result<DatabaseData> {
         // For structure only, we leave rows empty
         // But we should get columns
         let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table_name))?;
-        let columns: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1))?
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
             .collect::<Result<_, _>>()?;
         drop(stmt); // Drop stmt before closing conn
 
-        db_data.tables.insert(table_name, TableData {
-            columns,
-            rows: Vec::new(), // Empty rows for now
-        });
+        db_data.tables.insert(
+            table_name,
+            TableData {
+                columns,
+                rows: Vec::new(), // Empty rows for now
+            },
+        );
     }
 
     // Clean up
@@ -206,34 +221,40 @@ fn extract_database_structure(db_path: &Path) -> Result<DatabaseData> {
 // Helper to get full table data on demand
 pub fn get_table_data(db_path: &Path, table_name: &str) -> Result<TableData> {
     let conn = Connection::open(db_path)?; // Open readonly?
-    
+
     // Get columns
     let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table_name))?;
-    let columns: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1))?
+    let columns: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(1))?
         .collect::<Result<_, _>>()?;
 
     // Get rows
     let mut stmt = conn.prepare(&format!("SELECT * FROM {}", table_name))?;
     let column_count = stmt.column_count();
-    
-    let rows = stmt.query_map([], |row| {
-        let mut row_data = Vec::new();
-        for i in 0..column_count {
-            let val = row.get_ref(i)?;
-            let json_val = match val {
-                rusqlite::types::ValueRef::Null => serde_json::Value::Null,
-                rusqlite::types::ValueRef::Integer(i) => serde_json::Value::Number(i.into()),
-                rusqlite::types::ValueRef::Real(f) => serde_json::Number::from_f64(f).map(serde_json::Value::Number).unwrap_or(serde_json::Value::Null),
-                rusqlite::types::ValueRef::Text(t) => serde_json::Value::String(String::from_utf8_lossy(t).to_string()),
-                rusqlite::types::ValueRef::Blob(b) => serde_json::Value::String(format!("<BLOB {} bytes>", b.len())),
-            };
-            row_data.push(json_val);
-        }
-        Ok(row_data)
-    })?.collect::<Result<Vec<_>, _>>()?;
 
-    Ok(TableData {
-        columns,
-        rows,
-    })
+    let rows = stmt
+        .query_map([], |row| {
+            let mut row_data = Vec::new();
+            for i in 0..column_count {
+                let val = row.get_ref(i)?;
+                let json_val = match val {
+                    rusqlite::types::ValueRef::Null => serde_json::Value::Null,
+                    rusqlite::types::ValueRef::Integer(i) => serde_json::Value::Number(i.into()),
+                    rusqlite::types::ValueRef::Real(f) => serde_json::Number::from_f64(f)
+                        .map(serde_json::Value::Number)
+                        .unwrap_or(serde_json::Value::Null),
+                    rusqlite::types::ValueRef::Text(t) => {
+                        serde_json::Value::String(String::from_utf8_lossy(t).to_string())
+                    }
+                    rusqlite::types::ValueRef::Blob(b) => {
+                        serde_json::Value::String(format!("<BLOB {} bytes>", b.len()))
+                    }
+                };
+                row_data.push(json_val);
+            }
+            Ok(row_data)
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(TableData { columns, rows })
 }

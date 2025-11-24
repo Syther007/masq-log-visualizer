@@ -52,16 +52,22 @@ pub async fn get_log_range(
 
     let file = match File::open(&log_path) {
         Ok(f) => f,
-        Err(_) => return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to open log file").into_response(),
+        Err(_) => {
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to open log file",
+            )
+                .into_response()
+        }
     };
 
     let reader = BufReader::new(file);
-    let all_lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
+    let all_lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
     let total_lines = all_lines.len();
 
     let num_lines = params.lines.unwrap_or(1000);
     let from_end = params.from_end.as_deref() == Some("true");
-    
+
     let (start, end, lines) = if from_end {
         let start = total_lines.saturating_sub(num_lines);
         let end = total_lines;
@@ -83,7 +89,8 @@ pub async fn get_log_range(
         total_lines,
         start,
         end,
-    }).into_response()
+    })
+    .into_response()
 }
 
 pub async fn download_log(
@@ -97,7 +104,7 @@ pub async fn download_log(
     }
 
     // Serve file as attachment
-    // For simplicity using tower-http's ServeFile in the router is easier, 
+    // For simplicity using tower-http's ServeFile in the router is easier,
     // but here we can manually return the bytes or use a dedicated handler.
     // Let's use a simple read for now, or better, let the router handle static files if possible.
     // But since this is dynamic path, we'll read it.
@@ -105,11 +112,19 @@ pub async fn download_log(
         Ok(bytes) => (
             [
                 (axum::http::header::CONTENT_TYPE, "text/plain"),
-                (axum::http::header::CONTENT_DISPOSITION, &format!("attachment; filename=\"{}\"", file_name)),
+                (
+                    axum::http::header::CONTENT_DISPOSITION,
+                    &format!("attachment; filename=\"{}\"", file_name),
+                ),
             ],
             bytes,
-        ).into_response(),
-        Err(_) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file").into_response(),
+        )
+            .into_response(),
+        Err(_) => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to read file",
+        )
+            .into_response(),
     }
 }
 
@@ -132,14 +147,18 @@ pub async fn get_db_table_data(
     Path((node_name, table_name)): Path<(String, String)>,
 ) -> impl IntoResponse {
     let db_path = state.input_dir.join(&node_name).join("node-data.db");
-    
+
     if !db_path.exists() {
-         return (axum::http::StatusCode::NOT_FOUND, "Database not found").into_response();
+        return (axum::http::StatusCode::NOT_FOUND, "Database not found").into_response();
     }
 
     match get_table_data(&db_path, &table_name) {
         Ok(data) => Json(data).into_response(),
-        Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to query database: {}", e)).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to query database: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -160,24 +179,28 @@ pub async fn get_gossip(
 pub async fn dashboard(State(state): State<AppState>) -> impl IntoResponse {
     let nodes = state.nodes_data.read().unwrap();
     let mut context = Context::new();
-    
+
     // Convert HashMap to Vec for template
     let nodes_vec: Vec<&NodeData> = nodes.values().collect();
     let mut all_nodes: Vec<&String> = nodes.keys().collect();
     all_nodes.sort(); // Sort alphabetically
-    
+
     context.insert("nodes", &nodes_vec);
     context.insert("allNodes", &all_nodes);
     context.insert("inputDir", &state.input_dir.to_string_lossy());
-    
-    // We also need fileTree for the dashboard... 
+
+    // We also need fileTree for the dashboard...
     // Implementing a simple file tree structure
     let file_tree = get_directory_tree(&state.input_dir);
     context.insert("fileTree", &file_tree);
 
     match state.tera.render("dashboard.html", &context) {
         Ok(html) => Html(html).into_response(),
-        Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Template error: {}", e)).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Template error: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -186,18 +209,22 @@ pub async fn node_view(
     Path(node_name): Path<String>,
 ) -> impl IntoResponse {
     let nodes = state.nodes_data.read().unwrap();
-    
+
     if let Some(node) = nodes.get(&node_name) {
         let mut context = Context::new();
         let mut all_nodes: Vec<&String> = nodes.keys().collect();
         all_nodes.sort(); // Sort alphabetically
-        
+
         context.insert("node", node);
         context.insert("allNodes", &all_nodes);
-        
+
         match state.tera.render("node_view.html", &context) {
             Ok(html) => Html(html).into_response(),
-            Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Template error: {}", e)).into_response(),
+            Err(e) => (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Template error: {}", e),
+            )
+                .into_response(),
         }
     } else {
         (axum::http::StatusCode::NOT_FOUND, "Node not found").into_response()
@@ -214,7 +241,11 @@ struct FileTreeItem {
 }
 
 fn get_directory_tree(path: &std::path::Path) -> FileTreeItem {
-    let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let name = path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
     let mut children = Vec::new();
 
     if path.is_dir() {
@@ -222,25 +253,33 @@ fn get_directory_tree(path: &std::path::Path) -> FileTreeItem {
             for entry in entries.flatten() {
                 let path = entry.path();
                 let file_name = path.file_name().unwrap_or_default().to_string_lossy();
-                if file_name.starts_with('.') { continue; }
+                if file_name.starts_with('.') {
+                    continue;
+                }
 
                 children.push(get_directory_tree(&path));
             }
         }
     }
-    
+
     // Sort directories first
     children.sort_by(|a, b| {
         if a.item_type == b.item_type {
             a.name.cmp(&b.name)
+        } else if a.item_type == "directory" {
+            std::cmp::Ordering::Less
         } else {
-            if a.item_type == "directory" { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater }
+            std::cmp::Ordering::Greater
         }
     });
 
     FileTreeItem {
         name,
-        item_type: if path.is_dir() { "directory".to_string() } else { "file".to_string() },
+        item_type: if path.is_dir() {
+            "directory".to_string()
+        } else {
+            "file".to_string()
+        },
         children,
     }
 }
