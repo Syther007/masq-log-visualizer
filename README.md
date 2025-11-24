@@ -99,6 +99,41 @@ cargo run -- -i ../Example-Logs-3 --host 0.0.0.0 --port 8080
 - **Rusqlite 0.31**: SQLite with bundled library
 - **Tokio**: High-performance async runtime
 
+## Building and Releases
+
+### Automated Builds
+
+This project uses GitHub Actions to automatically build binaries for multiple platforms.
+
+**Supported Platforms:**
+- Linux (x64, ARM64)
+- macOS (x64, ARM64)  
+- Windows (x64, ARM64)
+
+### Creating a Release
+
+To create a new release with binaries:
+
+1. Tag your commit:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+
+2. GitHub Actions will automatically:
+   - Build binaries for all platforms
+   - Package them with templates and assets
+   - Create a GitHub release with downloadable archives
+
+### Manual Trigger
+
+You can manually trigger builds from the GitHub Actions tab.
+
+### CI/CD
+
+- **CI Workflow**: Runs tests, formatting checks, and clippy on every push/PR
+- **Release Workflow**: Builds cross-platform binaries when tags are pushed
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
