@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Masq Node Visualizer - Dashboard</title>
+   <style>
+      body {
+         font-family: sans-serif;
+         margin: 0;
+         padding: 0;
+         display: flex;
+         height: 100vh;
+      }
+
+      #sidebar {
+         width: 250px;
+         background: #f4f4f4;
+         border-right: 1px solid #ddd;
+         padding: 20px;
+         overflow-y: auto;
+      }
+
+      #content {
+         flex: 1;
+         padding: 20px;
+         overflow-y: auto;
+      }
+
+      h1 {
+         margin-top: 0;
+      }
+
+      ul {
+         list-style: none;
+         padding: 0;
+      }
+
+      li {
+         margin-bottom: 10px;
+      }
+
+      a {
+         text-decoration: none;
+         color: #333;
+      }
+
+      a:hover {
+         color: #007bff;
+      }
+
+      .active {
+         font-weight: bold;
+         color: #007bff;
+      }
+
+      .file-tree {
+         margin-top: 30px;
+         border-top: 1px solid #eee;
+         padding-top: 20px;
+      }
+
+      .file-tree ul {
+         list-style: none;
+         padding-left: 20px;
+      }
+
+      .file-tree li {
+         margin-bottom: 5px;
+         position: relative;
+      }
+
+      .file-tree .directory::before {
+         content: "📁 ";
+      }
+
+      .file-tree .file::before {
+         content: "📄 ";
+      }
+
+      .file-tree .directory {
+         font-weight: bold;
+         color: #2c3e50;
+         cursor: pointer;
+      }
+
+      .file-tree .file {
+         color: #7f8c8d;
+      }
+
+      .path-info {
+         background: #f8f9fa;
+         padding: 10px;
+         border-radius: 4px;
+         font-family: monospace;
+         margin-bottom: 20px;
+      }
+   </style>
+</head>
+
+<body>
+   <div id="sidebar">
+      <h3>Nodes</h3>
+      <ul>
+         <li><a href="/" class="active">Dashboard</a></li>
+         {% for nodeName in allNodes %}
+         <li><a href="/node/{{ nodeName }}">
+               {{ nodeName }}
+            </a></li>
+         {% endfor %}
+      </ul>
+   </div>
+   <div id="content">
+      <h1>Dashboard</h1>
+
+      <div class="path-info">
+         <strong>Input Directory:</strong>
+         {{ inputDir }}
+      </div>
+
+      <p>Found {{ nodes | length }} nodes.</p>
+      <ul>
+         {% for node in nodes %}
+         <li><a href="/node/{{ node.name }}">
+               {{ node.name }}
+            </a></li>
+         {% endfor %}
+      </ul>
+
+      <div class="file-tree">
+         <h3>File Structure</h3>
+         <ul id="file-tree-root"></ul>
+      </div>
+   </div>
+
+   <script>
+      // Render file tree
+      const fileTree = {{ fileTree | json_encode() | safe }};
+
+      function renderTree(item, parentElement) {
+         const li = document.createElement('li');
+         const span = document.createElement('span');
+         span.className = item.type;
+         span.textContent = item.name;
+         li.appendChild(span);
+
+         if (item.children && item.children.length > 0) {
+            const ul = document.createElement('ul');
+            item.children.forEach(child => renderTree(child, ul));
+            li.appendChild(ul);
+         }
+
+         parentElement.appendChild(li);
+      }
+
+      const root = document.getElementById('file-tree-root');
+      if (fileTree) {
+         renderTree(fileTree, root);
+      }
+   </script>
+</body>
+
+</html>

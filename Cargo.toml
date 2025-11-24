@@ -1,0 +1,28 @@
+[package]
+name = "masq-log-visualizer"
+version = "0.2.0"
+edition = "2021"
+authors = ["Masq Log Visualizer Contributors"]
+description = "A web-based visualization tool for Masq node logs, databases, and gossip graphs"
+license = "MIT"
+repository = "https://github.com/yourusername/masq-log-visualizer"
+keywords = ["masq", "log-viewer", "visualization", "graph", "sqlite"]
+categories = ["command-line-utilities", "visualization", "web-programming"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
+clap = { version = "4.4", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rusqlite = { version = "0.31", features = ["bundled"] }
+tera = "1.19"
+regex = "1.10"
+flate2 = "1.0"
+walkdir = "2.4"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"

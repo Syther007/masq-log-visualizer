@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Masq Node Visualizer - {{ node.name }}
+   </title>
+   <script type="text/javascript" src="/assets/vis-network.min.js"></script>
+   <style>
+      body {
+         font-family: sans-serif;
+         margin: 0;
+         padding: 0;
+         display: flex;
+         height: 100vh;
+      }
+
+      #sidebar {
+         width: 250px;
+         background: #f4f4f4;
+         border-right: 1px solid #ddd;
+         padding: 20px;
+         overflow-y: auto;
+      }
+
+      #content {
+         flex: 1;
+         padding: 20px;
+         display: flex;
+         flex-direction: column;
+         overflow: hidden;
+      }
+
+      h1 {
+         margin-top: 0;
+      }
+
+      ul {
+         list-style: none;
+         padding: 0;
+      }
+
+      li {
+         margin-bottom: 10px;
+      }
+
+      a {
+         text-decoration: none;
+         color: #333;
+      }
+
+      a:hover {
+         color: #007bff;
+      }
+
+      .active {
+         font-weight: bold;
+         color: #007bff;
+      }
+
+      /* Tab Styles */
+      .tabs {
+         display: flex;
+         border-bottom: 2px solid #ddd;
+         margin-bottom: 20px;
+      }
+
+      .tab {
+         padding: 10px 20px;
+         cursor: pointer;
+         background: #f4f4f4;
+         border: 1px solid #ddd;
+         border-bottom: none;
+         margin-right: 5px;
+         border-radius: 5px 5px 0 0;
+      }
+
+      .tab:hover {
+         background: #e9e9e9;
+      }
+
+      .tab.active-tab {
+         background: white;
+         font-weight: bold;
+         border-bottom: 2px solid white;
+         margin-bottom: -2px;
+      }
+
+      .tab-content {
+         display: none;
+         flex: 1;
+         overflow: auto;
+      }
+
+      .tab-content.active-content {
+         display: flex;
+         flex-direction: column;
+      }
+
+      /* Log Viewer Styles */
+      .log-viewer {
+         display: flex;
+         flex-direction: column;
+         gap: 15px;
+         height: 100%;
+      }
+
+      .log-controls {
+         display: flex;
+         gap: 10px;
+         align-items: center;
+      }
+
+      .log-controls input {
+         padding: 8px;
+         flex: 1;
+         border: 1px solid #ddd;
+         border-radius: 4px;
+      }
+
+      .log-files {
+         display: flex;
+         flex-wrap: wrap;
+         gap: 5px;
+      }
+
+      .log-file-link {
+         padding: 5px 10px;
+         background: #007bff;
+         color: white;
+         border-radius: 4px;
+         font-size: 0.9em;
+      }
+
+      .log-file-link:hover {
+         background: #0056b3;
+         color: white;
+      }
+
+      .log-content {
+         flex: 1;
+         background: #1e1e1e;
+         color: #d4d4d4;
+         font-family: 'Courier New', monospace;
+         font-size: 12px;
+         padding: 15px;
+         overflow: auto;
+         white-space: pre-wrap;
+         border-radius: 4px;
+      }
+
+      /* Database Viewer Styles */
+      .db-viewer {
+         display: flex;
+         flex-direction: column;
+         gap: 15px;
+         height: 100%;
+      }
+
+      .db-controls {
+         display: flex;
+         gap: 10px;
+         align-items: center;
+      }
+
+      .db-controls select {
+         padding: 8px;
+         border: 1px solid #ddd;
+         border-radius: 4px;
+         min-width: 200px;
+      }
+
+      .db-controls input {
+         padding: 8px;
+         flex: 1;
+         border: 1px solid #ddd;
+         border-radius: 4px;
+      }
+
+      .db-table-container {
+         flex: 1;
+         overflow: auto;
+         border: 1px solid #ddd;
+         border-radius: 4px;
+      }
+
+      .db-table {
+         width: 100%;
+         border-collapse: collapse;
+         font-size: 14px;
+      }
+
+      .db-table th {
+         background: #f4f4f4;
+         padding: 10px;
+         text-align: left;
+         font-weight: bold;
+         border-bottom: 2px solid #ddd;
+         position: sticky;
+         top: 0;
+      }
+
+      .db-table td {
+         padding: 8px;
+         border-bottom: 1px solid #eee;
+      }
+
+      .db-table tr:hover {
+         background: #f9f9f9;
+      }
+
+      .empty-message {
+         padding: 20px;
+         text-align: center;
+         color: #666;
+      }
+
+      /* Gossip Graph Styles */
+      #gossip-network {
+         width: 100%;
+         flex: 1;
+         border: 1px solid #ddd;
+         background: #fff;
+      }
+
+      .gossip-container {
+         display: flex;
+         flex: 1;
+         height: 100%;
+         min-height: 0;
+         /* Important for nested flex scrolling */
+         overflow: hidden;
+      }
+
+      .gossip-details {
+         width: 300px;
+         background: #f9f9f9;
+         border-left: 1px solid #ddd;
+         padding: 15px;
+         overflow-y: auto;
+         font-family: monospace;
+         white-space: pre-wrap;
+      }
+
+      .gossip-controls {
+         padding: 10px;
+         background: #f4f4f4;
+         border-bottom: 1px solid #ddd;
+         display: flex;
+         align-items: center;
+         gap: 10px;
+      }
+
+      .gossip-slider-container {
+         flex: 1;
+         display: flex;
+         align-items: center;
+         gap: 10px;
+      }
+
+      #gossip-slider {
+         flex: 1;
+      }
+
+      .gossip-info {
+         font-family: monospace;
+         font-size: 0.9em;
+      }
+   </style>
+</head>
+
+<body>
+   <div id="sidebar">
+      <h3>Nodes</h3>
+      <ul>
+         <li><a href="/">Dashboard</a></li>
+         {% for nodeName in allNodes %}
+         <li><a href="/node/{{ nodeName }}" class="{% if nodeName == node.name %}active{% endif %}">
+               {{ nodeName }}
+            </a></li>
+         {% endfor %}
+      </ul>
+   </div>
+   <div id="content">
+      <h1>
+         {{ node.name }}
+      </h1>
+
+      <!-- Tabs -->
+      <div class="tabs">
+         <div class="tab active-tab" onclick="switchTab('logs', this)">Logs</div>
+         <div class="tab" onclick="switchTab('database', this)">Database</div>
+         <div class="tab" onclick="switchTab('graph', this)">Gossip Graph</div>
+      </div>
+
+      <!-- Logs Tab -->
+      <div id="logs-tab" class="tab-content active-content">
+         <div class="log-viewer">
+            <div class="log-controls">
+               <input type="text" id="log-search" placeholder="Search logs..." oninput="filterLogs()">
+               <button onclick="loadFullLog()" id="load-full-btn">Load Full Log</button>
+               <button onclick="loadMoreLogs()" id="load-more-btn">Load More (1000 lines)</button>
+            </div>
+            <div>
+               <strong>Available Log Files:</strong>
+               <div class="log-files">
+                  {% for logFile in node.logFiles %}
+                  <a href="/api/logs/{{ node.name }}/{{ logFile }}" class="log-file-link" download>
+                     {{ logFile }}
+                  </a>
+                  {% endfor %}
+               </div>
+            </div>
+            <div>
+               <strong>Current Log:</strong> <span id="log-info">Loading...</span>
+            </div>
+            <div class="log-content" id="log-content">
+               Loading log data...
+            </div>
+         </div>
+      </div>
+
+      <!-- Database Tab -->
+      <div id="database-tab" class="tab-content">
+         <div class="db-viewer">
+            <div class="db-controls">
+               <select id="table-select" onchange="displayTable()">
+                  <option value="">-- Select Table --</option>
+                  {% for tableName, tableData in node.database.tables %}
+                  <option value="{{ tableName }}">
+                     {{ tableName }}
+                  </option>
+                  {% endfor %}
+               </select>
+               <input type="text" id="db-search" placeholder="Search table..." oninput="filterTable()">
+            </div>
+            <div class="db-table-container" id="table-container">
+               <div class="empty-message">Select a table to view its contents</div>
+            </div>
+         </div>
+      </div>
+
+      <!-- Gossip Graph Tab -->
+      <div id="graph-tab" class="tab-content">
+         <div class="gossip-controls">
+            <div class="gossip-slider-container">
+               <select id="gossip-type-filter" onchange="filterGossipByType()">
+                  <option value="all">All Gossip</option>
+                  <option value="Received Gossip">Received Gossip</option>
+                  <option value="Sent Gossip">Sent Gossip</option>
+                  <option value="Current database">Current Database</option>
+               </select>
+               <button onclick="prevGossip()">Previous</button>
+               <input type="range" id="gossip-slider" min="0" max="0" value="0" oninput="updateGossipFromSlider()">
+               <button onclick="nextGossip()">Next</button>
+            </div>
+            <div class="gossip-info" id="gossip-info">
+               No gossip data available
+            </div>
+         </div>
+         <div class="gossip-container">
+            <div id="gossip-network"></div>
+            <div class="gossip-details" id="gossip-details">
+               Click a node to view details...
+            </div>
+         </div>
+      </div>
+   </div>
+
+   <script>
+      // Gossip Data Loading
+      let gossipData = [];
+      let filteredGossipData = []; // Initialize here
+
+      async function loadGossipData() {
+         try {
+            console.log('Fetching gossip data from API...');
+            const response = await fetch(`/api/gossip/{{ node.name }}`);
+            if (!response.ok) {
+               throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            gossipData = await response.json();
+            console.log('Gossip data loaded:', gossipData.length, 'entries');
+
+            // Initialize filtered data with all data
+            filteredGossipData = [...gossipData];
+
+            // Initialize slider and view if data exists
+            const slider = document.getElementById('gossip-slider');
+            if (slider) {
+               slider.max = Math.max(0, gossipData.length - 1);
+               slider.value = 0;
+            }
+
+            if (gossipData.length > 0) {
+               // Apply initial filter (All Gossip)
+               if (typeof filterGossipByType === 'function') {
+                  filterGossipByType();
+               } else {
+                  // If filterGossipByType isn't defined yet, just show the first entry
+                  // We need to wait for showGossip to be defined if it's not yet
+                  if (typeof showGossip === 'function') {
+                     showGossip(0);
+                  } else {
+                     // Retry after a short delay to ensure scripts are loaded
+                     setTimeout(() => {
+                        if (typeof filterGossipByType === 'function') filterGossipByType();
+                        else if (typeof showGossip === 'function') showGossip(0);
+                     }, 100);
+                  }
+               }
+            } else {
+               const info = document.getElementById('gossip-info');
+               if (info) info.textContent = 'No gossip data available';
+            }
+         } catch (error) {
+            console.error('Error loading gossip data:', error);
+            const info = document.getElementById('gossip-info');
+            if (info) info.textContent = 'Error loading gossip data';
+         }
+      }
+
+      // Database data will be loaded via API
+      let dbData = {};
+   </script>
+   <script>
+      // Tab switching
+      function switchTab(tabName, clickedTab) {
+         // Hide all tabs
+         document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active-content');
+         });
+         document.querySelectorAll('.tab').forEach(tab => {
+            tab.classList.remove('active-tab');
+         });
+
+         // Show selected tab
+         document.getElementById(tabName + '-tab').classList.add('active-content');
+         if (clickedTab) {
+            clickedTab.classList.add('active-tab');
+         }
+      }
+
+      // Log filtering and management
+      const nodeName = '{{ node.name }}';
+      let fullLogLines = []; // All lines if full log is loaded
+      let allLogLines = []; // Current working set of loaded lines
+      let currentLogLines = []; // After filtering
+      let showingFromEnd = true; // Start with last 1000 lines (newest)
+      let displayedLines = 1000;
+      const CHUNK_SIZE = 1000;
+      let fullLogLoaded = false;
+
+      // Pagination state
+      let totalLogLines = 0;
+      let loadedStartIndex = 0;
+      let loadedEndIndex = 0;
+
+      // Initialize with API call to get last 1000 lines
+      async function initializeLogs() {
+         try {
+            const response = await fetch(`/api/logs/${nodeName}/MASQNode_rCURRENT.log/range?fromEnd=true&lines=${CHUNK_SIZE}`);
+            const data = await response.json();
+
+            allLogLines = data.lines;
+            totalLogLines = data.totalLines;
+
+            // Set indices based on response
+            loadedEndIndex = totalLogLines;
+            loadedStartIndex = Math.max(0, totalLogLines - allLogLines.length);
+
+            currentLogLines = [...allLogLines];
+            displayedLines = allLogLines.length;
+
+            updateLogDisplay();
+         } catch (error) {
+            console.error('Error loading initial logs:', error);
+            document.getElementById('log-content').textContent = 'Error loading logs';
+            document.getElementById('log-info').textContent = 'Failed to load';
+         }
+      }
+
+      function updateLogDisplay() {
+         // If showing from end, we want the *last* displayedLines of the current set
+         // If showing from start, we want the *first* displayedLines
+
+         // Actually, let's just show everything we've loaded, filtered
+         const linesToShow = currentLogLines;
+         document.getElementById('log-content').textContent = linesToShow.join('\n');
+
+         const positionText = showingFromEnd ? 'newest' : 'oldest';
+         document.getElementById('log-info').textContent =
+            `Showing ${currentLogLines.length} lines (${loadedStartIndex}-${loadedEndIndex} of ${totalLogLines})`;
+
+         // Update load more button
+         const btn = document.getElementById('load-more-btn');
+
+         let canLoadMore = false;
+         if (showingFromEnd) {
+            canLoadMore = loadedStartIndex > 0;
+         } else {
+            canLoadMore = loadedEndIndex < totalLogLines;
+         }
+
+         if (!canLoadMore && !fullLogLoaded) {
+            // If we've loaded everything chunk by chunk, mark as full
+            if (allLogLines.length >= totalLogLines) fullLogLoaded = true;
+         }
+
+         if (fullLogLoaded || !canLoadMore) {
+            btn.textContent = 'All lines loaded';
+            btn.disabled = true;
+         } else {
+            btn.textContent = `Load More (Next ${CHUNK_SIZE} lines)`;
+            btn.disabled = false;
+         }
+      }
+
+      function filterLogs() {
+         const searchTerm = document.getElementById('log-search').value.toLowerCase();
+
+         if (searchTerm === '') {
+            currentLogLines = [...allLogLines];
+         } else {
+            currentLogLines = allLogLines.filter(line => line.toLowerCase().includes(searchTerm));
+         }
+
+         updateLogDisplay();
+      }
+
+      async function toggleLogOrder() {
+         showingFromEnd = !showingFromEnd;
+
+         // Reset and load from the other end
+         allLogLines = [];
+         currentLogLines = [];
+
+         const btn = document.getElementById('load-more-btn');
+         btn.textContent = 'Loading...';
+         btn.disabled = true;
+
+         try {
+            if (showingFromEnd) {
+               // Load last chunk
+               await initializeLogs();
+            } else {
+               // Load first chunk
+               const response = await fetch(`/api/logs/${nodeName}/MASQNode_rCURRENT.log/range?start=0&lines=${CHUNK_SIZE}`);
+               const data = await response.json();
+
+               allLogLines = data.lines;
+               // Server might not return totalLines correctly for start query, use previous if available
+               if (data.totalLines) totalLogLines = data.totalLines;
+
+               loadedStartIndex = 0;
+               loadedEndIndex = allLogLines.length;
+
+               currentLogLines = [...allLogLines];
+               updateLogDisplay();
+            }
+         } catch (e) {
+            console.error('Error toggling order:', e);
+            alert('Failed to load logs');
+         }
+      }
+
+      async function loadFullLog() {
+         const fullBtn = document.getElementById('load-full-btn');
+         const moreBtn = document.getElementById('load-more-btn');
+
+         fullBtn.textContent = 'Loading...';
+         fullBtn.disabled = true;
+         moreBtn.disabled = true;
+
+         try {
+            // Fetch the entire log file
+            const response = await fetch(`/api/logs/${nodeName}/MASQNode_rCURRENT.log/range?start=0&lines=${totalLogLines}`);
+            const data = await response.json();
+
+            allLogLines = data.lines;
+            totalLogLines = data.totalLines;
+            loadedStartIndex = 0;
+            loadedEndIndex = totalLogLines;
+            fullLogLoaded = true;
+
+            currentLogLines = [...allLogLines];
+            updateLogDisplay();
+
+            fullBtn.textContent = 'Full Log Loaded';
+         } catch (error) {
+            console.error('Error loading full log:', error);
+            alert('Failed to load full log');
+            fullBtn.disabled = false;
+            fullBtn.textContent = 'Load Full Log';
+            moreBtn.disabled = false;
+         }
+      }
+
+      async function loadMoreLogs() {
+         const btn = document.getElementById('load-more-btn');
+         btn.textContent = 'Loading...';
+         btn.disabled = true;
+
+         try {
+            if (showingFromEnd) {
+               // We are showing newest first. "Load More" means load OLDER lines (prepend)
+               // Current range is [loadedStartIndex, loadedEndIndex]
+               // We want [Math.max(0, loadedStartIndex - CHUNK_SIZE), loadedStartIndex]
+
+               const newStart = Math.max(0, loadedStartIndex - CHUNK_SIZE);
+               const linesToFetch = loadedStartIndex - newStart;
+
+               if (linesToFetch <= 0) return;
+
+               const response = await fetch(`/api/logs/${nodeName}/MASQNode_rCURRENT.log/range?start=${newStart}&lines=${linesToFetch}`);
+               const data = await response.json();
+
+               // Prepend new lines
+               allLogLines = [...data.lines, ...allLogLines];
+               loadedStartIndex = newStart;
+
+            } else {
+               // We are showing oldest first. "Load More" means load NEWER lines (append)
+               // Current range is [loadedStartIndex, loadedEndIndex]
+               // We want [loadedEndIndex, loadedEndIndex + CHUNK_SIZE]
+
+               const response = await fetch(`/api/logs/${nodeName}/MASQNode_rCURRENT.log/range?start=${loadedEndIndex}&lines=${CHUNK_SIZE}`);
+               const data = await response.json();
+
+               // Append new lines
+               allLogLines = [...allLogLines, ...data.lines];
+               loadedEndIndex += data.lines.length;
+            }
+
+            filterLogs(); // Re-apply filter and update display
+
+         } catch (error) {
+            console.error('Error loading more logs:', error);
+            alert('Failed to load more logs');
+            btn.disabled = false;
+            btn.textContent = 'Try Again';
+         }
+      }
+
+      // Initialize on page load
+      initializeLogs();
+      loadDatabaseData();
+      loadGossipData();
+
+      // Load database data from API
+      async function loadDatabaseData() {
+         try {
+            // In Rust version, we might need to fetch table list first if not embedded?
+            // But we embedded table names in the template loop, so we know what tables exist.
+            // However, we still need to fetch content when selected.
+            // The original code fetched ALL db data here?
+            // "const response = await fetch(`/api/db/${nodeName}`); dbData = await response.json();"
+            // Yes, it fetched everything.
+            // In our Rust version, we want to fetch on demand.
+            // So let's CHANGE this logic.
+
+            // We'll just initialize dbData structure with empty tables
+            dbData = {};
+            {% for tableName, tableData in node.database.tables %}
+            dbData['{{ tableName }}'] = { columns: [], rows: [] }; // Placeholder
+            {% endfor %}
+
+            console.log('Database structure initialized');
+         } catch (error) {
+            console.error('Error loading database data:', error);
+         }
+      }
+
+      // Database table display
+      let currentTableData = [];
+      async function displayTable() {
+         const tableName = document.getElementById('table-select').value;
+         const container = document.getElementById('table-container');
+
+         if (!tableName) {
+            container.innerHTML = '<div class="empty-message">Select a table to view its contents</div>';
+            return;
+         }
+
+         // Check if we have data for this table
+         if (!dbData[tableName] || !dbData[tableName].rows || dbData[tableName].rows.length === 0) {
+            // Fetch data for this table
+            container.innerHTML = '<div class="empty-message">Loading table data...</div>';
+            try {
+               const response = await fetch(`/api/db/${nodeName}/${tableName}`);
+               const data = await response.json();
+               dbData[tableName] = data;
+            } catch (e) {
+               container.innerHTML = `<div class="empty-message">Error loading table: ${e.message}</div>`;
+               return;
+            }
+         }
+
+         const tableData = dbData[tableName];
+         if (!tableData || !tableData.rows.length) {
+            container.innerHTML = '<div class="empty-message">Table is empty</div>';
+            return;
+         }
+
+         currentTableData = tableData;
+         renderTable(tableData.columns, tableData.rows);
+      }
+
+      function renderTable(columns, rows) {
+         const container = document.getElementById('table-container');
+         let html = '<table class="db-table"><thead><tr>';
+
+         // Headers
+         columns.forEach(col => {
+            html += `<th>${col}</th>`;
+         });
+         html += '</tr></thead><tbody>';
+
+         // Rows - convert objects to arrays using column order
+         rows.forEach(row => {
+            html += '<tr>';
+            columns.forEach((col, index) => {
+               // In Rust version, rows are arrays of values, matching columns order
+               // But wait, the original JS code: "const cell = row[col];" implies row is an object?
+               // Let's check parser.ts: "const rowData = rows.map((row: any) => { return columnNames.map((col: string) => row[col]); });"
+               // So rowData IS an array of arrays.
+               // BUT, the original template JS says: "const cell = row[col];"
+               // Wait, if row is an array, row[col] where col is a string name would be undefined.
+               // Ah, looking at original parser.ts again:
+               // "dbData.tables[tableName] = { columns: columnNames, rows: rowData };"
+               // And rowData is array of arrays.
+               // So the original template JS "const cell = row[col]" MUST BE WRONG if row is an array?
+               // Or maybe I misread parser.ts.
+               // "const rowData = rows.map((row: any) => { return columnNames.map((col: string) => row[col]); });"
+               // Yes, rowData is array of arrays.
+               // So "rows.forEach(row => { columns.forEach(col => { const cell = row[col]; ... }) })"
+               // This would fail if row is an array and col is a string.
+               // UNLESS the original template code I saw was:
+               // "rows.forEach(row => { html += '<tr>'; columns.forEach(col => { const cell = row[col]; ... }) })"
+               // Let's re-read the template carefully.
+               // Line 668: "rows.forEach(row => {"
+               // Line 670: "columns.forEach(col => {"
+               // Line 671: "const cell = row[col];"
+               // This implies row is an object keyed by column name.
+
+               // BUT parser.ts line 179: "const rowData = rows.map((row: any) => { return columnNames.map((col: string) => row[col]); });"
+               // This creates an array of values.
+               // So there is a mismatch in my understanding or the code.
+               // If parser.ts returns array of arrays, then the template code `row[col]` is wrong.
+               // UNLESS `col` is the index? No, `columns` is array of strings.
+
+               // Let's assume for Rust port, we return array of arrays (which is efficient).
+               // So we need to fix the JS in the template to handle array of arrays.
+               // `const cell = row[index];`
+
+               const cell = row[index];
+               html += `<td>${cell !== null && cell !== undefined ? cell : '<em>null</em>'}</td>`;
+            });
+            html += '</tr>';
+         });
+
+         html += '</tbody></table>';
+         container.innerHTML = html;
+      }
+
+      // Table filtering
+      function filterTable() {
+         if (!currentTableData.columns) return;
+
+         const searchTerm = document.getElementById('db-search').value.toLowerCase();
+
+         if (searchTerm === '') {
+            renderTable(currentTableData.columns, currentTableData.rows);
+            return;
+         }
+
+         const filteredRows = currentTableData.rows.filter(row => {
+            return row.some(cell => {
+               if (cell === null) return false;
+               return String(cell).toLowerCase().includes(searchTerm);
+            });
+         });
+
+         renderTable(currentTableData.columns, filteredRows);
+      }
+
+      // Gossip Graph Visualization
+      let network = null;
+      let currentGossipIndex = -1;
+      // filteredGossipData is declared at the top
+
+      function filterGossipByType() {
+         const filterType = document.getElementById('gossip-type-filter').value;
+         console.log('Filtering by type:', filterType);
+
+         if (filterType === 'all') {
+            filteredGossipData = gossipData;
+         } else {
+            filteredGossipData = gossipData.filter(entry => entry.tag === filterType);
+         }
+
+         console.log('Filtered data length:', filteredGossipData.length);
+
+         const slider = document.getElementById('gossip-slider');
+         slider.max = Math.max(0, filteredGossipData.length - 1);
+         slider.value = 0;
+
+         if (filteredGossipData.length > 0) {
+            showGossip(0);
+         } else {
+            document.getElementById('gossip-info').textContent = `No ${filterType} data found.`;
+            document.getElementById('gossip-details').innerHTML = 'No data to display for this filter.';
+         }
+      }
+
+      function initGossipGraph() {
+         if (typeof gossipData === 'undefined' || !gossipData || gossipData.length === 0) {
+            document.getElementById('gossip-info').textContent = "No gossip data found in logs.";
+            return;
+         }
+
+         filteredGossipData = gossipData;
+
+         const slider = document.getElementById('gossip-slider');
+         slider.max = gossipData.length - 1;
+         slider.value = 0;
+
+         // Initial render
+         showGossip(0);
+      }
+
+      function showGossip(index) {
+         console.log('showGossip called with index:', index);
+
+         if (!filteredGossipData || index < 0 || index >= filteredGossipData.length) {
+            console.log('Invalid gossip data or index');
+            return;
+         }
+
+         currentGossipIndex = index;
+         const entry = filteredGossipData[index];
+         console.log('Gossip entry:', entry);
+
+         // Update info
+         document.getElementById('gossip-info').textContent =
+            `[${index + 1}/${filteredGossipData.length}] ${entry.timestamp} - ${entry.actor} (${entry.tag})`;
+
+         // Update slider
+         document.getElementById('gossip-slider').value = index;
+
+         // Parse DOT and render
+         try {
+            const parsedData = vis.parseDOTNetwork(entry.dot);
+            console.log('Parsed DOT data:', parsedData);
+
+            const container = document.getElementById('gossip-network');
+            const data = {
+               nodes: parsedData.nodes,
+               edges: parsedData.edges
+            };
+
+            const options = {
+               layout: {
+                  hierarchical: {
+                     enabled: false
+                  }
+               },
+               physics: {
+                  stabilization: {
+                     enabled: true,
+                     iterations: 200
+                  },
+                  barnesHut: {
+                     gravitationalConstant: -2000,
+                     centralGravity: 0.1,
+                     springLength: 150,
+                     springConstant: 0.05,
+                     damping: 0.5,
+                     avoidOverlap: 0.5
+                  },
+                  solver: 'barnesHut'
+               },
+               interaction: {
+                  hover: true,
+                  selectConnectedEdges: true,
+                  multiselect: true,
+                  dragNodes: true
+               }
+            };
+
+            if (network) {
+               console.log('Updating existing network');
+               network.setData(data);
+               // Re-enable physics briefly for layout, then freeze
+               network.setOptions({ physics: { enabled: true } });
+               setTimeout(() => {
+                  network.setOptions({ physics: { enabled: false } });
+               }, 2000);
+            } else {
+               console.log('Creating new network');
+               network = new vis.Network(container, data, options);
+
+               // Freeze physics after stabilization to keep nodes static
+               network.once("stabilizationIterationsDone", function () {
+                  console.log('Stabilization done, freezing physics');
+                  network.setOptions({ physics: { enabled: false } });
+               });
+            }
+
+            // Always update click handler to use current data
+            console.log('Attaching click handler');
+            network.off("click"); // Remove old handler
+            network.on("click", function (params) {
+               const detailsDiv = document.getElementById('gossip-details');
+
+               // Debug: log what was clicked
+               console.log('Click event:', params);
+
+               if (params.nodes.length > 0) {
+                  const nodeId = params.nodes[0];
+                  console.log('Clicked node ID:', nodeId);
+
+                  // Get node from current network data
+                  const currentData = network.body.data.nodes.get(nodeId);
+                  console.log('Node data:', currentData);
+
+                  // Always display something, even if data is incomplete
+                  const displayId = currentData?.id || nodeId || 'Unknown';
+                  const displayLabel = currentData?.label || currentData?.id || nodeId || 'No label';
+                  const fullData = currentData || { id: nodeId, note: 'Limited data available' };
+                  detailsDiv.innerHTML = `<strong>Node Details:</strong>\n\nID: ${displayId}\nLabel: ${displayLabel}\n\n${JSON.stringify(fullData, null, 2)}`;
+               } else if (params.edges.length > 0) {
+                  const edgeId = params.edges[0];
+                  console.log('Clicked edge ID:', edgeId);
+
+                  // Get edge from current network data
+                  const currentEdge = network.body.data.edges.get(edgeId);
+                  console.log('Edge data:', currentEdge);
+
+                  // Always display something, even if data is incomplete
+                  const displayFrom = currentEdge?.from || 'Unknown';
+                  const displayTo = currentEdge?.to || 'Unknown';
+                  const displayLabel = currentEdge?.label || '';
+                  const fullData = currentEdge || { id: edgeId, note: 'Limited data available' };
+                  detailsDiv.innerHTML = `<strong>Edge Details:</strong>\n\nFrom: ${displayFrom}\nTo: ${displayTo}\nLabel: ${displayLabel}\n\n${JSON.stringify(fullData, null, 2)}`;
+               } else {
+                  console.log('Clicked on canvas background');
+                  detailsDiv.innerHTML = 'Click a node or edge to view details...';
+               }
+            });
+            console.log('Click handler attached successfully');
+
+         } catch (error) {
+            console.error('Error rendering gossip graph:', error);
+            document.getElementById('gossip-details').innerHTML = `<strong>Error:</strong>\n\n${error.message}`;
+         }
+      }
+
+      function updateGossipFromSlider() {
+         const index = parseInt(document.getElementById('gossip-slider').value);
+         showGossip(index);
+      }
+
+      function prevGossip() {
+         if (currentGossipIndex > 0) {
+            showGossip(currentGossipIndex - 1);
+         }
+      }
+
+      function nextGossip() {
+         if (currentGossipIndex < filteredGossipData.length - 1) {
+            showGossip(currentGossipIndex + 1);
+         }
+      }
+
+      // Initialize on load
+      window.addEventListener('load', () => {
+         // Initialize logs and db as before
+
+         // Initialize gossip if data exists
+         if (typeof gossipData !== 'undefined') {
+            initGossipGraph();
+         }
+      });
+   </script>
+</body>
+
+</html>
