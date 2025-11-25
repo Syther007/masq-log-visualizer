@@ -6,45 +6,102 @@ use rusqlite::Connection;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub fn scan_directory(input_dir: &Path) -> Result<HashMap<String, NodeData>> {
-    let mut all_data = HashMap::new();
+    let mut nodes = HashMap::new();
+    let entries = fs::read_dir(input_dir)?;
 
-    if !input_dir.exists() {
-        return Err(anyhow::anyhow!(
-            "Input directory does not exist: {:?}",
-            input_dir
-        ));
-    }
+    // First, check if we have subdirectories (nested structure)
+    let mut file_entries = Vec::new();
 
-    for entry in fs::read_dir(input_dir)? {
+    for entry in entries {
         let entry = entry?;
         let path = entry.path();
-
+        
         if path.is_dir() {
-            let node_name = path.file_name().unwrap().to_string_lossy().to_string();
-
+            let dir_name = path.file_name().unwrap().to_string_lossy().to_string();
+            
             // Heuristic: check if it looks like a node dir
             let current_log = path.join("MASQNode_rCURRENT.log");
             let has_logs = fs::read_dir(&path)?.any(|f| {
                 f.map(|e| e.path().extension().is_some_and(|ext| ext == "zip"))
-                    .unwrap_or(false)
+                 .unwrap_or(false)
             });
 
             if current_log.exists() || has_logs {
-                println!("Processing node: {}", node_name);
                 match parse_node(&path) {
-                    Ok(node_data) => {
-                        all_data.insert(node_name, node_data);
+                    Ok(mut node_data) => {
+                        node_data.name = dir_name.clone();
+                        nodes.insert(dir_name, node_data);
                     }
-                    Err(e) => eprintln!("Failed to parse node {}: {}", node_name, e),
+                    Err(e) => eprintln!("Failed to parse node {}: {}", dir_name, e),
                 }
+            }
+        } else {
+            file_entries.push(path);
+        }
+    }
+
+    // If no node subdirectories were found, try parsing as flat structure
+    if nodes.is_empty() && !file_entries.is_empty() {
+        // Group files by prefix (e.g., "1-MASQNode..." -> "1")
+        let mut node_files: HashMap<String, Vec<PathBuf>> = HashMap::new();
+        
+        for path in file_entries {
+            if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+                // Look for prefix separated by hyphen
+                if let Some(idx) = filename.find('-') {
+                    let prefix = &filename[0..idx];
+                    // Simple validation: prefix should be alphanumeric
+                    if !prefix.is_empty() && prefix.chars().all(|c| c.is_alphanumeric()) {
+                        node_files.entry(prefix.to_string()).or_default().push(path);
+                    }
+                }
+            }
+        }
+
+        // Parse each group as a node
+        for (node_name, files) in node_files {
+            let mut node_data = NodeData {
+                name: node_name.clone(),
+                neighborhood: Vec::new(),
+                gossip: Vec::new(),
+                log_files: Vec::new(),
+                current_log: String::new(),
+                database: DatabaseData { tables: HashMap::new() },
+            };
+
+            // Process files for this node
+            for path in files {
+                let filename = path.file_name().unwrap().to_string_lossy();
+                
+                if filename.contains("MASQNode_rCURRENT.log") {
+                    node_data.current_log = filename.to_string();
+                    node_data.log_files.push(filename.to_string());
+                    
+                    // Parse log content
+                    if let Ok(content) = read_last_lines(&path, 1000) { // Read initial chunk for parsing
+                        parse_content(&content, &mut node_data);
+                    }
+                } else if filename.ends_with(".log") || filename.ends_with(".zip") {
+                    node_data.log_files.push(filename.to_string());
+                } else if filename.ends_with(".db") {
+                    // Extract DB structure
+                    if let Ok(db_data) = extract_database_structure(&path) {
+                        node_data.database = db_data;
+                    }
+                }
+            }
+            
+            // Only add if we found relevant data
+            if !node_data.log_files.is_empty() || !node_data.database.tables.is_empty() {
+                nodes.insert(node_name, node_data);
             }
         }
     }
 
-    Ok(all_data)
+    Ok(nodes)
 }
 
 fn parse_node(node_dir: &Path) -> Result<NodeData> {

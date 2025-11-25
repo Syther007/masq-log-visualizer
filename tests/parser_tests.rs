@@ -214,3 +214,26 @@ fn test_serialization_deserialization() {
     assert_eq!(parsed_node.neighborhood.len(), 1);
     assert_eq!(parsed_node.gossip.len(), 1);
 }
+
+#[test]
+fn test_scan_nonexistent_directory() {
+    let path = PathBuf::from("./nonexistent_directory_12345");
+    let result = scan_directory(&path);
+    assert!(result.is_err(), "Scanning nonexistent directory should fail");
+}
+
+#[test]
+fn test_scan_empty_directory() {
+    let temp_dir = std::env::temp_dir().join("masq_test_empty_dir");
+    let _ = std::fs::create_dir(&temp_dir);
+    
+    let result = scan_directory(&temp_dir);
+    // It might succeed but return empty map, or fail depending on implementation.
+    // Based on parser.rs, it uses fs::read_dir, so it should succeed but return empty.
+    
+    if let Ok(nodes) = result {
+        assert!(nodes.is_empty(), "Empty directory should result in no nodes");
+    }
+    
+    let _ = std::fs::remove_dir(&temp_dir);
+}

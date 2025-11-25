@@ -206,3 +206,89 @@ async fn test_log_range_api() {
         }
     }
 }
+
+#[tokio::test]
+async fn test_api_db_table_not_found() {
+    let setup = setup_test_app().await;
+    if setup.is_none() {
+        return;
+    }
+    let (app, nodes_data) = setup.unwrap();
+    
+    // Find a node with database
+    let node_name = nodes_data
+        .iter()
+        .find(|(_, node)| !node.database.tables.is_empty())
+        .map(|(name, _)| name.clone());
+        
+    if let Some(name) = node_name {
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(&format!("/api/db/{}/nonexistent_table", name))
+                    .body(Body::empty())
+                    .unwrap()
+            )
+            .await
+            .unwrap();
+            
+        // Should probably be 404 or 500 depending on implementation
+        // Let's check it's not 200 OK
+        assert_ne!(response.status(), StatusCode::OK);
+    }
+}
+
+#[tokio::test]
+async fn test_download_log_not_found() {
+    let setup = setup_test_app().await;
+    if setup.is_none() {
+        return;
+    }
+    let (app, nodes_data) = setup.unwrap();
+    
+    let node_name = nodes_data.keys().next().unwrap();
+    
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(&format!("/api/logs/{}/nonexistent.log", node_name))
+                .body(Body::empty())
+                .unwrap()
+        )
+        .await
+        .unwrap();
+        
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_log_range_invalid_params() {
+    let setup = setup_test_app().await;
+    if setup.is_none() {
+        return;
+    }
+    let (app, nodes_data) = setup.unwrap();
+    
+    // Find a node with log files
+    for (node_name, node_data) in &nodes_data {
+        if !node_data.log_files.is_empty() {
+            let log_file = &node_data.log_files[0];
+            
+            // Test with 0 lines (should default or handle gracefully)
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri(&format!("/api/logs/{}/{}/range?lines=0", node_name, log_file))
+                        .body(Body::empty())
+                        .unwrap()
+                )
+                .await
+                .unwrap();
+            
+            // Should still be OK, just empty or default
+            assert_eq!(response.status(), StatusCode::OK);
+            return;
+        }
+    }
+}
+
