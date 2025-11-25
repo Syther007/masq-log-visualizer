@@ -127,11 +127,21 @@ jobs:
         with:
           path: artifacts
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: artifacts/**/*
-          draft: false
-          prerelease: false
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Create Release with GitHub CLI
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Extract tag name
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          
+          # Create release
+          gh release create "$TAG_NAME" \
+            --repo ${{ github.repository }} \
+            --title "Release $TAG_NAME" \
+            --notes "Automated release for $TAG_NAME with binaries for all platforms." \
+            artifacts/*/*.tar.gz \
+            artifacts/*/*.zip
+
