@@ -115,33 +115,37 @@ jobs:
           name: ${{ matrix.asset_name }}
           path: ${{ matrix.asset_name }}.zip
 
-  release:
-    name: Create Release
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
 
-      - name: Display structure of downloaded files
-        run: ls -R artifacts
-
-      - name: Create Release with GitHub CLI
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Extract tag name
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-          
-          # Create release
-          gh release create "$TAG_NAME" \
-            --repo ${{ github.repository }} \
-            --title "Release $TAG_NAME" \
-            --notes "Automated release for $TAG_NAME with binaries for all platforms." \
-            artifacts/*/*.tar.gz \
-            artifacts/*/*.zip
-
+  # Note: Automatic release creation disabled due to GitHub permissions issues
+  # To create a release:
+  # 1. Download artifacts from the completed workflow run
+  # 2. Go to Releases → Draft a new release
+  # 3. Upload the downloaded platform archives
+  # 4. Publish the release
+  
+  # release:
+  #   name: Create Release
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   if: startsWith(github.ref, 'refs/tags/')
+  #   
+  #   steps:
+  #     - name: Download all artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         path: artifacts
+  #
+  #     - name: Display structure of downloaded files
+  #       run: ls -R artifacts
+  #
+  #     - name: Create Release with GitHub CLI
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       run: |
+  #         TAG_NAME=${GITHUB_REF#refs/tags/}
+  #         gh release create "$TAG_NAME" \
+  #           --repo ${{ github.repository }} \
+  #           --title "Release $TAG_NAME" \
+  #           --notes "Automated release for $TAG_NAME with binaries for all platforms." \
+  #           artifacts/*/*.tar.gz \
+  #           artifacts/*/*.zip
