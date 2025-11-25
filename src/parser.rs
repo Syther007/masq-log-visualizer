@@ -75,17 +75,18 @@ pub fn scan_directory(input_dir: &Path) -> Result<HashMap<String, NodeData>> {
             // Process files for this node
             for path in files {
                 let filename = path.file_name().unwrap().to_string_lossy();
+                let full_path = path.to_string_lossy().to_string();
                 
                 if filename.contains("MASQNode_rCURRENT.log") {
-                    node_data.current_log = filename.to_string();
-                    node_data.log_files.push(filename.to_string());
+                    node_data.current_log = full_path.clone();
+                    node_data.log_files.push(full_path);
                     
                     // Parse log content
                     if let Ok(content) = read_last_lines(&path, 1000) { // Read initial chunk for parsing
                         parse_content(&content, &mut node_data);
                     }
                 } else if filename.ends_with(".log") || filename.ends_with(".zip") {
-                    node_data.log_files.push(filename.to_string());
+                    node_data.log_files.push(full_path);
                 } else if filename.ends_with(".db") {
                     // Extract DB structure
                     if let Ok(db_data) = extract_database_structure(&path) {

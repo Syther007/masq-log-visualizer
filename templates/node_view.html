@@ -442,8 +442,13 @@
          }
       }
 
+
       // Log filtering and management
+      // CACHE BUSTER: v2.0 - Fixed flat directory support (2025-11-25)
       const nodeName = '{{ node.name }}';
+      // Current log file name (extracted in Rust)
+      const currentLogFile = "{{ currentLogFile }}";
+      console.log('[DEBUG] currentLogFile =', currentLogFile); // Debug output
       let fullLogLines = []; // All lines if full log is loaded
       let allLogLines = []; // Current working set of loaded lines
       let currentLogLines = []; // After filtering
@@ -460,7 +465,8 @@
       // Initialize with API call to get last 1000 lines
       async function initializeLogs() {
          try {
-            const response = await fetch(`/api/logs/${nodeName}/MASQNode_rCURRENT.log/range?fromEnd=true&lines=${CHUNK_SIZE}`);
+            const response = await fetch(`/api/logs/${nodeName}/${currentLogFile}/range?fromEnd=true&lines=${CHUNK_SIZE}`);
+
             const data = await response.json();
 
             allLogLines = data.lines;
@@ -546,7 +552,8 @@
                await initializeLogs();
             } else {
                // Load first chunk
-               const response = await fetch(`/api/logs/${nodeName}/MASQNode_rCURRENT.log/range?start=0&lines=${CHUNK_SIZE}`);
+               const response = await fetch(`/api/logs/${nodeName}/${currentLogFile}/range?start=0&lines=${CHUNK_SIZE}`);
+
                const data = await response.json();
 
                allLogLines = data.lines;
@@ -575,7 +582,8 @@
 
          try {
             // Fetch the entire log file
-            const response = await fetch(`/api/logs/${nodeName}/MASQNode_rCURRENT.log/range?start=0&lines=${totalLogLines}`);
+            const response = await fetch(`/api/logs/${nodeName}/${currentLogFile}/range?start=0&lines=${totalLogLines}`);
+
             const data = await response.json();
 
             allLogLines = data.lines;
@@ -613,7 +621,8 @@
 
                if (linesToFetch <= 0) return;
 
-               const response = await fetch(`/api/logs/${nodeName}/MASQNode_rCURRENT.log/range?start=${newStart}&lines=${linesToFetch}`);
+               const response = await fetch(`/api/logs/${nodeName}/${currentLogFile}/range?start=${newStart}&lines=${linesToFetch}`);
+
                const data = await response.json();
 
                // Prepend new lines
@@ -625,7 +634,7 @@
                // Current range is [loadedStartIndex, loadedEndIndex]
                // We want [loadedEndIndex, loadedEndIndex + CHUNK_SIZE]
 
-               const response = await fetch(`/api/logs/${nodeName}/MASQNode_rCURRENT.log/range?start=${loadedEndIndex}&lines=${CHUNK_SIZE}`);
+               const response = await fetch(`/api/logs/${nodeName}/${currentLogFile}/range?start=${loadedEndIndex}&lines=${CHUNK_SIZE}`);
                const data = await response.json();
 
                // Append new lines

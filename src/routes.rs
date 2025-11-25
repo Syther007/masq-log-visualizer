@@ -43,8 +43,38 @@ pub async fn get_log_range(
     Path((node_name, file_name)): Path<(String, String)>,
     Query(params): Query<LogRangeParams>,
 ) -> impl IntoResponse {
-    let input_dir = &state.input_dir;
-    let log_path = input_dir.join(&node_name).join(&file_name);
+    // Look up the correct path from NodeData
+    let nodes = state.nodes_data.read().unwrap();
+    let log_path = if let Some(node) = nodes.get(&node_name) {
+        // Find matching log file path
+        let stored_path = node.log_files.iter()
+            .find(|path| {
+                PathBuf::from(path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n == file_name)
+                    .unwrap_or(false)
+            });
+        
+        if let Some(path_str) = stored_path {
+            let path = PathBuf::from(path_str);
+            // Check if this is a full/relative path or just a filename
+            if path.parent().is_some() && path.parent() != Some(std::path::Path::new("")) {
+                // It's a path with directory components (flat structure)
+                path
+            } else {
+                // It's just a filename (nested structure), construct full path
+                state.input_dir.join(&node_name).join(&file_name)
+            }
+        } else {
+            // Not found in log_files, fallback to constructed path
+            state.input_dir.join(&node_name).join(&file_name)
+        }
+    } else {
+        // Node not found, fallback to constructed path
+        state.input_dir.join(&node_name).join(&file_name)
+    };
+    drop(nodes);
 
     if !log_path.exists() {
         return (axum::http::StatusCode::NOT_FOUND, "Log file not found").into_response();
@@ -97,24 +127,56 @@ pub async fn download_log(
     State(state): State<AppState>,
     Path((node_name, file_name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let log_path = state.input_dir.join(&node_name).join(&file_name);
+    // Look up the correct path from NodeData
+    let nodes = state.nodes_data.read().unwrap();
+    let log_path = if let Some(node) = nodes.get(&node_name) {
+        // Find matching log file path
+        let stored_path = node.log_files.iter()
+            .find(|path| {
+                PathBuf::from(path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n == file_name)
+                    .unwrap_or(false)
+            });
+        
+        if let Some(path_str) = stored_path {
+            let path = PathBuf::from(path_str);
+            // Check if this is a full/relative path or just a filename
+            if path.parent().is_some() && path.parent() != Some(std::path::Path::new("")) {
+                // It's a path with directory components (flat structure)
+                path
+            } else {
+                // It's just a filename (nested structure), construct full path
+                state.input_dir.join(&node_name).join(&file_name)
+            }
+        } else {
+            // Not found in log_files, fallback to constructed path
+            state.input_dir.join(&node_name).join(&file_name)
+        }
+    } else {
+        // Node not found, fallback to constructed path
+        state.input_dir.join(&node_name).join(&file_name)
+    };
+    drop(nodes);
 
     if !log_path.exists() {
         return (axum::http::StatusCode::NOT_FOUND, "Log file not found").into_response();
     }
 
+    // Extract just the filename for the attachment header
+    let attachment_name = log_path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&file_name);
+
     // Serve file as attachment
-    // For simplicity using tower-http's ServeFile in the router is easier,
-    // but here we can manually return the bytes or use a dedicated handler.
-    // Let's use a simple read for now, or better, let the router handle static files if possible.
-    // But since this is dynamic path, we'll read it.
     match std::fs::read(&log_path) {
         Ok(bytes) => (
             [
                 (axum::http::header::CONTENT_TYPE, "text/plain"),
                 (
                     axum::http::header::CONTENT_DISPOSITION,
-                    &format!("attachment; filename=\"{}\"", file_name),
+                    &format!("attachment; filename=\"{}\"", attachment_name),
                 ),
             ],
             bytes,
@@ -146,7 +208,14 @@ pub async fn get_db_table_data(
     State(state): State<AppState>,
     Path((node_name, table_name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let db_path = state.input_dir.join(&node_name).join("node-data.db");
+    // Try nested structure first
+    let mut db_path = state.input_dir.join(&node_name).join("node-data.db");
+    
+    // If nested structure database doesn't exist, try flat structure
+    if !db_path.exists() {
+        // Flat structure: {node_name}-node-data.db in input_dir
+        db_path = state.input_dir.join(format!("{}-node-data.db", node_name));
+    }
 
     if !db_path.exists() {
         return (axum::http::StatusCode::NOT_FOUND, "Database not found").into_response();
@@ -215,8 +284,19 @@ pub async fn node_view(
         let mut all_nodes: Vec<&String> = nodes.keys().collect();
         all_nodes.sort(); // Sort alphabetically
 
+        // Extract the filename from the first log file path
+        let current_log_file = node.log_files.first()
+            .and_then(|path| {
+                PathBuf::from(path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| "MASQNode_rCURRENT.log".to_string());
+
         context.insert("node", node);
         context.insert("allNodes", &all_nodes);
+        context.insert("currentLogFile", &current_log_file);
 
         match state.tera.render("node_view.html", &context) {
             Ok(html) => Html(html).into_response(),
@@ -233,14 +313,14 @@ pub async fn node_view(
 
 // Helper for file tree
 #[derive(Serialize)]
-struct FileTreeItem {
-    name: String,
+pub struct FileTreeItem {
+    pub name: String,
     #[serde(rename = "type")]
-    item_type: String, // "directory" or "file"
-    children: Vec<FileTreeItem>,
+    pub item_type: String, // "directory" or "file"
+    pub children: Vec<FileTreeItem>,
 }
 
-fn get_directory_tree(path: &std::path::Path) -> FileTreeItem {
+pub fn get_directory_tree(path: &std::path::Path) -> FileTreeItem {
     let name = path
         .file_name()
         .unwrap_or_default()
