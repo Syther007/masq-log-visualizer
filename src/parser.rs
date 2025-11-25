@@ -18,15 +18,15 @@ pub fn scan_directory(input_dir: &Path) -> Result<HashMap<String, NodeData>> {
     for entry in entries {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.is_dir() {
             let dir_name = path.file_name().unwrap().to_string_lossy().to_string();
-            
+
             // Heuristic: check if it looks like a node dir
             let current_log = path.join("MASQNode_rCURRENT.log");
             let has_logs = fs::read_dir(&path)?.any(|f| {
                 f.map(|e| e.path().extension().is_some_and(|ext| ext == "zip"))
-                 .unwrap_or(false)
+                    .unwrap_or(false)
             });
 
             if current_log.exists() || has_logs {
@@ -47,7 +47,7 @@ pub fn scan_directory(input_dir: &Path) -> Result<HashMap<String, NodeData>> {
     if nodes.is_empty() && !file_entries.is_empty() {
         // Group files by prefix (e.g., "1-MASQNode..." -> "1")
         let mut node_files: HashMap<String, Vec<PathBuf>> = HashMap::new();
-        
+
         for path in file_entries {
             if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
                 // Look for prefix separated by hyphen
@@ -69,20 +69,23 @@ pub fn scan_directory(input_dir: &Path) -> Result<HashMap<String, NodeData>> {
                 gossip: Vec::new(),
                 log_files: Vec::new(),
                 current_log: String::new(),
-                database: DatabaseData { tables: HashMap::new() },
+                database: DatabaseData {
+                    tables: HashMap::new(),
+                },
             };
 
             // Process files for this node
             for path in files {
                 let filename = path.file_name().unwrap().to_string_lossy();
                 let full_path = path.to_string_lossy().to_string();
-                
+
                 if filename.contains("MASQNode_rCURRENT.log") {
                     node_data.current_log = full_path.clone();
                     node_data.log_files.push(full_path);
-                    
+
                     // Parse log content
-                    if let Ok(content) = read_last_lines(&path, 1000) { // Read initial chunk for parsing
+                    if let Ok(content) = read_last_lines(&path, 1000) {
+                        // Read initial chunk for parsing
                         parse_content(&content, &mut node_data);
                     }
                 } else if filename.ends_with(".log") || filename.ends_with(".zip") {
@@ -94,7 +97,7 @@ pub fn scan_directory(input_dir: &Path) -> Result<HashMap<String, NodeData>> {
                     }
                 }
             }
-            
+
             // Only add if we found relevant data
             if !node_data.log_files.is_empty() || !node_data.database.tables.is_empty() {
                 nodes.insert(node_name, node_data);

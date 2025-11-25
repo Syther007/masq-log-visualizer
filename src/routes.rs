@@ -47,15 +47,14 @@ pub async fn get_log_range(
     let nodes = state.nodes_data.read().unwrap();
     let log_path = if let Some(node) = nodes.get(&node_name) {
         // Find matching log file path
-        let stored_path = node.log_files.iter()
-            .find(|path| {
-                PathBuf::from(path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|n| n == file_name)
-                    .unwrap_or(false)
-            });
-        
+        let stored_path = node.log_files.iter().find(|path| {
+            PathBuf::from(path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n == file_name)
+                .unwrap_or(false)
+        });
+
         if let Some(path_str) = stored_path {
             let path = PathBuf::from(path_str);
             // Check if this is a full/relative path or just a filename
@@ -131,15 +130,14 @@ pub async fn download_log(
     let nodes = state.nodes_data.read().unwrap();
     let log_path = if let Some(node) = nodes.get(&node_name) {
         // Find matching log file path
-        let stored_path = node.log_files.iter()
-            .find(|path| {
-                PathBuf::from(path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|n| n == file_name)
-                    .unwrap_or(false)
-            });
-        
+        let stored_path = node.log_files.iter().find(|path| {
+            PathBuf::from(path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n == file_name)
+                .unwrap_or(false)
+        });
+
         if let Some(path_str) = stored_path {
             let path = PathBuf::from(path_str);
             // Check if this is a full/relative path or just a filename
@@ -165,7 +163,8 @@ pub async fn download_log(
     }
 
     // Extract just the filename for the attachment header
-    let attachment_name = log_path.file_name()
+    let attachment_name = log_path
+        .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or(&file_name);
 
@@ -210,7 +209,7 @@ pub async fn get_db_table_data(
 ) -> impl IntoResponse {
     // Try nested structure first
     let mut db_path = state.input_dir.join(&node_name).join("node-data.db");
-    
+
     // If nested structure database doesn't exist, try flat structure
     if !db_path.exists() {
         // Flat structure: {node_name}-node-data.db in input_dir
@@ -285,7 +284,9 @@ pub async fn node_view(
         all_nodes.sort(); // Sort alphabetically
 
         // Extract the filename from the first log file path
-        let current_log_file = node.log_files.first()
+        let current_log_file = node
+            .log_files
+            .first()
             .and_then(|path| {
                 PathBuf::from(path)
                     .file_name()
